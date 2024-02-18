@@ -6,8 +6,14 @@ import (
 	"os"
 	"os/signal"
 	"qsapi/internal"
+	"qsapi/pkg/pg_db"
+	"qsapi/pkg/repo_cron"
 
 	"github.com/gorilla/mux"
+)
+
+const (
+	dsn = "user=user password=password dbname=quotation_db host=localhost port=5432 sslmode=disable"
 )
 
 func main() {
@@ -16,12 +22,16 @@ func main() {
 
 	router := mux.NewRouter()
 
-	db, err := internal.ConnectToDB()
-	if err != nil {
-		log.Fatalf("Failed to connect to Postgres: %v", err)
-	}
+	db, dbErr := pg_db.NewDatabasePg(dsn)
+	panicIfErr(dbErr)
 
-	srv := internal.NewServer(appContext, router, db)
+	ts := repo_cron.NewTaskScheduler()
+	ts.Start()
+	newTask := repo_cron.NewTask(db)
+	cronErr := ts.AddTask("@every 30s", newTask.Run)
+	panicIfErr(cronErr)
+
+	srv := internal.NewServer(appContext, router, db, ts)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -36,6 +46,7 @@ func main() {
 	select {
 	case <-stop:
 		log.Println("Got SIGINT, exiting...")
+		ts.Stop()
 		cancel()
 	case <-appContext.Done():
 		log.Println("Application context canceled, exiting...")

@@ -8,24 +8,28 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"qsapi/pkg/pg_db"
+	"qsapi/pkg/repo_cron"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"gorm.io/gorm"
 )
 
 type Server struct {
 	ctx    context.Context
 	router *mux.Router
-	db     *gorm.DB
+	db     *pg_db.DatabasePg
+	ts     repo_cron.ITaskScheduler
 	http.Server
 }
 
-func NewServer(ctx context.Context, router *mux.Router, db *gorm.DB) (s *Server) {
+func NewServer(ctx context.Context, router *mux.Router, db *pg_db.DatabasePg, ts repo_cron.ITaskScheduler) (s *Server) {
 	s = &Server{
 		ctx:    ctx,
 		router: router,
 		db:     db,
+		ts:     ts,
 		Server: http.Server{
 			Addr:         ":8080",
 			ReadTimeout:  10 * time.Second,
@@ -48,12 +52,16 @@ type getRatesResp struct {
 }
 
 type updateReq struct {
+	CurrencyCode string `json:"currencyCode"`
 }
 
 type updateResp struct {
+	UpdateID uuid.UUID `json:"updateID"`
 }
 
 func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	vars := mux.Vars(r)
 	apiURI := "https://api.currencybeacon.com/v1"
 
@@ -74,10 +82,22 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Error reading response body: %v\n", err)
 	}
 
-	var respBody getRatesResp
-	if err := json.Unmarshal(body, &respBody); err != nil {
+	var curBeaconResp getRatesResp
+	if err := json.Unmarshal(body, &curBeaconResp); err != nil {
 		log.Fatalf("Error unmarshaling response: %v\n", err)
 	}
+
+	var reqBody updateReq
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		log.Fatalf("Error decoding request body: %v\n", err)
+	}
+
+	// Забираю время в которое будет произведено обновление (НУЖЕН ID Таски cron)
+	s.ts.GetResolveTime(s.ts.GetMainTaskID())
+
+	// Пишу в таблицу RateUpdates
+
+	// Возвращаю ID обновления в респонсе
 
 }
 
