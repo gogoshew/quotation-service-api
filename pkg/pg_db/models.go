@@ -3,13 +3,12 @@ package pg_db
 import (
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type RateUpdate struct {
-	ID         uint      `gorm:"primarykey"`
-	UpdateID   uuid.UUID `gorm:"unique"`
+	ID         uint   `gorm:"primarykey"`
+	UpdateID   string `gorm:"unique"`
 	Currency   string
 	Value      float64
 	CreateAt   time.Time

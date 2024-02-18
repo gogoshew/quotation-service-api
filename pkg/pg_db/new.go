@@ -35,9 +35,7 @@ func NewDatabasePg(dsn string) (*DatabasePg, error) {
 	}, nil
 }
 
-func (d *DatabasePg) CreateRowForUpdate(ru *RateUpdate) error {
-	var rateUpdate *RateUpdate
-
+func (d *DatabasePg) CreateRowForUpdate(rateUpdate *RateUpdate) error {
 	res := d.db.Table(rateUpdateTable).Create(rateUpdate)
 	if err := res.Error; err != nil {
 		log.Fatalf("Error inserting row into %s table", rateUpdateTable)
