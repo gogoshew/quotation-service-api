@@ -61,49 +61,79 @@ type updateResp struct {
 }
 
 func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	var updateID string
 
 	var reqBody updateReq
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		log.Fatalf("Error decoding request body: %v\n", err)
 	}
 
-	rateValue, err := s.getRates(reqBody.Currency)
+	rateValue, err := s.getRate(reqBody.Currency)
 	if err != nil {
 		log.Fatalf("Error getting rate from currency API: %v\n", err)
 	}
 
-	// Забираю время в которое будет произведено обновление (НУЖЕН ID Таски cron)
-	updDate, err := s.ts.GetResolveTime(s.ts.GetMainTaskID())
+	row, err := s.db.GetRowByCurrency(reqBody.Currency)
 	if err != nil {
-		log.Fatalf("Error getting update time from Task Scheduler: %v\n", err)
+		log.Fatalf("Error getting row from rate buffer table: %v\n", err)
 	}
+	updateID = row.UpdateID
 
-	row := &pg_db.RateUpdate{
-		UpdateID:   uuid.New().String(),
-		Currency:   reqBody.Currency,
-		Value:      rateValue,
-		UpdateDate: updDate,
-	}
+	if row.UpdateFlag == false {
+		updateID = uuid.New().String()
+		rateInfo := &pg_db.RateBuffer{
+			UpdateID:   updateID,
+			Currency:   reqBody.Currency,
+			Value:      rateValue,
+			Base:       "USD",
+			UpdateFlag: true,
+		}
 
-	if err := s.db.CreateRowForUpdate(row); err != nil {
-		log.Fatal(err)
+		if err := s.db.CreateRowBuffer(rateInfo); err != nil {
+			log.Fatalf("Error inserting row rate buffer table: %v\n", err)
+		}
 	}
 
 	// Возвращаю ID обновления в респонсе
 
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(updateID))
+}
+
+type QuotationByIDReq struct {
+	UpdateID string
+}
+
+type QuotationByIDResp struct {
+	Value    float64
+	UpdateAt time.Time
 }
 
 func (s *Server) getQuotationByID(w http.ResponseWriter, r *http.Request) {
+	var req QuotationByIDReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Fatalf("Error decoding request body: %v\n", err)
+	}
 
+	//var row pg_db.RateBuffer
+	row, err := s.db.GetRowByUpdateID(req.UpdateID)
+	if err != nil {
+		log.Fatalf("Error getting quotation by ID: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	var resp QuotationByIDResp
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(updateID))
 }
 
 func (s *Server) getQuotationValue(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (s *Server) getRates(cur string) (float64, error) {
+func (s *Server) getRate(cur string) (float64, error) {
 	apiURI := "https://api.currencybeacon.com/v1"
 
 	qp := url.Values{}
