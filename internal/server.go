@@ -19,10 +19,9 @@ import (
 )
 
 const (
-	eur = "EUR"
-	mxn = "MXN"
-	gel = "GEL"
-	//base   = "USD"
+	eur    = "EUR"
+	mxn    = "MXN"
+	gel    = "GEL"
 	apiURI = "https://api.currencybeacon.com/v1/latest"
 	apiKey = "y3wA4rW34r5oXGaX592nns8JgouvA6Wm"
 )
@@ -90,12 +89,14 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	rateValue, err := s.getRate(cur)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		log.Printf("Error getting rate from currency API: %v\n", err)
 		return
 	}
 
 	row, err := s.db.GetRowByCurBuffer(cur)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		log.Printf("Error getting row from rate buffer table: %v\n", err)
 		return
 	}
@@ -111,6 +112,7 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 
 		if err := s.db.UpdateBuffer(cur, rateInfo); err != nil {
 			log.Printf("Error inserting row rate buffer table: %v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}
@@ -121,6 +123,7 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 	res, err := json.Marshal(resp)
 	if err != nil {
 		log.Printf("Error marshalling response: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -186,8 +189,8 @@ func (s *Server) getLatest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if row.Value == 0 {
-		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Quotation value didn't set yet..."))
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
@@ -199,6 +202,7 @@ func (s *Server) getLatest(w http.ResponseWriter, r *http.Request) {
 	res, err := json.Marshal(resp)
 	if err != nil {
 		log.Printf("Error marshalling response: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -207,8 +211,6 @@ func (s *Server) getLatest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getRate(cur string) (float64, error) {
-	//apiURI := "https://api.currencybeacon.com/v1/latest"
-
 	qp := url.Values{}
 	qp.Set("api_key", apiKey)
 	qp.Set("symbols", cur)

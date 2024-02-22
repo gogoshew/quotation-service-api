@@ -26,7 +26,6 @@ func main() {
 	if dbErr != nil {
 		panic(dbErr)
 	}
-	//panicIfErr(dbErr)
 
 	ts := repo_cron.NewTaskScheduler()
 	ts.Start()
@@ -35,7 +34,6 @@ func main() {
 	if dbErr != nil {
 		panic(cronErr)
 	}
-	//panicIfErr(cronErr)
 
 	srv := internal.NewServer(appContext, router, db, ts)
 
