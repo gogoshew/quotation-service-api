@@ -19,7 +19,7 @@ func NewTask(db *pg_db.DatabasePg) *UpdateTask {
 func (t *UpdateTask) Run() {
 	rows, err := t.db.GetRowsForUpdate()
 	if err != nil {
-		log.Fatalf("Error getting rows from cron task: %v\n", err)
+		log.Printf("Error getting rows from cron task: %v\n", err)
 		return
 	}
 	if len(rows) == 0 {
@@ -29,8 +29,9 @@ func (t *UpdateTask) Run() {
 
 	for _, row := range rows {
 		if err := t.db.UpdateLatest(row.Currency, row.Value); err != nil {
-			log.Fatalf("Error updating currency value from cron task: %v\n", err)
+			log.Printf("Error updating currency value from cron task: %v\n", err)
 		}
+		log.Printf("Successfully updated value of %s\n", row.Currency)
 	}
 
 }

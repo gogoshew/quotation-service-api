@@ -23,7 +23,7 @@ func NewTaskScheduler() ITaskScheduler {
 func (ts *TaskScheduler) AddTask(spec string, task func()) error {
 	id, err := ts.cron.AddFunc(spec, task)
 	if err != nil {
-		log.Fatalf("Error add new task to cron: %v\n", err)
+		log.Printf("Error add new task to cron: %v\n", err)
 	}
 	ts.taskID = id
 

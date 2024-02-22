@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"qsapi/pkg/pg_db"
 	"qsapi/pkg/repo_cron"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,10 +19,12 @@ import (
 )
 
 const (
-	eur  = "EUR"
-	mxn  = "MXN"
-	gel  = "GEL"
-	base = "USD"
+	eur = "EUR"
+	mxn = "MXN"
+	gel = "GEL"
+	//base   = "USD"
+	apiURI = "https://api.currencybeacon.com/v1/latest"
+	apiKey = "y3wA4rW34r5oXGaX592nns8JgouvA6Wm"
 )
 
 type Server struct {
@@ -54,13 +57,22 @@ func NewServer(ctx context.Context, router *mux.Router, db *pg_db.DatabasePg, ts
 }
 
 type getRatesResp struct {
+	Meta     Meta               `json:"meta"`
+	Response Response           `json:"response"`
+	Date     time.Time          `json:"date"`
+	Base     string             `json:"base"`
+	Rates    map[string]float64 `json:"rates"`
+}
+
+type Meta struct {
+	Code       int    `json:"code"`
+	Disclaimer string `json:"disclaimer"`
+}
+
+type Response struct {
 	Date  time.Time          `json:"date"`
 	Base  string             `json:"base"`
 	Rates map[string]float64 `json:"rates"`
-}
-
-type updateReq struct {
-	Currency string `json:"currency"`
 }
 
 type updateResp struct {
@@ -68,25 +80,21 @@ type updateResp struct {
 }
 
 func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
-	var reqBody updateReq
-	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		log.Printf("Error decoding request body: %v\n", err)
-		return
-	}
+	cur := strings.ToTitle(r.URL.Query().Get("currency"))
 
-	if !ValidateCurrency(reqBody.Currency) {
+	if !ValidateCurrency(cur) {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("No such currency"))
 		return
 	}
 
-	rateValue, err := s.getRate(reqBody.Currency)
+	rateValue, err := s.getRate(cur)
 	if err != nil {
 		log.Printf("Error getting rate from currency API: %v\n", err)
 		return
 	}
 
-	row, err := s.db.GetRowByCurBuffer(reqBody.Currency)
+	row, err := s.db.GetRowByCurBuffer(cur)
 	if err != nil {
 		log.Printf("Error getting row from rate buffer table: %v\n", err)
 		return
@@ -95,15 +103,13 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	if row.UpdateFlag == false {
 		updateID = uuid.New().String()
-		rateInfo := &pg_db.RateBuffer{
+		rateInfo := pg_db.BufferRate{
 			UpdateID:   updateID,
-			Currency:   reqBody.Currency,
 			Value:      rateValue,
-			Base:       base,
 			UpdateFlag: true,
 		}
 
-		if err := s.db.CreateRowBuffer(rateInfo); err != nil {
+		if err := s.db.UpdateBuffer(cur, rateInfo); err != nil {
 			log.Printf("Error inserting row rate buffer table: %v\n", err)
 			return
 		}
@@ -114,7 +120,7 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := json.Marshal(resp)
 	if err != nil {
-		log.Println("Error marshalling response")
+		log.Printf("Error marshalling response: %v\n", err)
 		return
 	}
 
@@ -122,21 +128,12 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 	w.Write(res)
 }
 
-//type QuotationByIDReq struct {
-//	UpdateID string `json:"updateID"`
-//}
-
 type QuotationByIDResp struct {
 	Value    float64   `json:"value"`
 	UpdateAt time.Time `json:"updateAt"`
 }
 
 func (s *Server) getQuotationByID(w http.ResponseWriter, r *http.Request) {
-	//var req QuotationByIDReq
-	//if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-	//	log.Printf("Error decoding request body: %v\n", err)
-	//}
-
 	updateID := r.URL.Query().Get("id")
 
 	row, err := s.db.GetRowByIDBuffer(updateID)
@@ -146,14 +143,20 @@ func (s *Server) getQuotationByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if row.Value == 0 && row.UpdatedAt.IsZero() {
+		log.Printf("ID %v doesn't exist", updateID)
+		w.Write([]byte(fmt.Sprintf("ID %v doesn't exist", updateID)))
+		return
+	}
+
 	resp := QuotationByIDResp{
 		Value:    row.Value,
-		UpdateAt: row.UpdateAt,
+		UpdateAt: row.UpdatedAt,
 	}
 
 	res, err := json.Marshal(resp)
 	if err != nil {
-		log.Println("Error marshalling response")
+		log.Printf("Error marshalling response: %v\n", err)
 		return
 	}
 
@@ -161,21 +164,19 @@ func (s *Server) getQuotationByID(w http.ResponseWriter, r *http.Request) {
 	w.Write(res)
 }
 
-//type LatestReq struct {
-//	Currency string `json:"currency"`
-//}
-
 type LatestResp struct {
 	Value    float64   `json:"value"`
 	UpdateAt time.Time `json:"updateAt"`
 }
 
 func (s *Server) getLatest(w http.ResponseWriter, r *http.Request) {
-	//var req LatestReq
-	//if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-	//	log.Printf("Error decoding request body: %v\n", err)
-	//}
-	cur := r.URL.Query().Get("currency")
+	cur := strings.ToTitle(r.URL.Query().Get("currency"))
+
+	if !ValidateCurrency(cur) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("No such currency"))
+		return
+	}
 
 	row, err := s.db.GetLatest(cur)
 	if err != nil {
@@ -184,14 +185,20 @@ func (s *Server) getLatest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if row.Value == 0 {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Quotation value didn't set yet..."))
+		return
+	}
+
 	resp := LatestResp{
 		Value:    row.Value,
-		UpdateAt: row.UpdateAt,
+		UpdateAt: row.UpdatedAt,
 	}
 
 	res, err := json.Marshal(resp)
 	if err != nil {
-		log.Println("Error marshalling response")
+		log.Printf("Error marshalling response: %v\n", err)
 		return
 	}
 
@@ -200,36 +207,36 @@ func (s *Server) getLatest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getRate(cur string) (float64, error) {
-	apiURI := "https://api.currencybeacon.com/v1"
+	//apiURI := "https://api.currencybeacon.com/v1/latest"
 
 	qp := url.Values{}
-	qp.Set("api_key", "y3wA4rW34r5oXGaX592nns8JgouvA6Wm")
+	qp.Set("api_key", apiKey)
 	qp.Set("symbols", cur)
 
 	reqURL := fmt.Sprintf("%s?%s", apiURI, qp.Encode())
 
 	resp, err := http.Get(reqURL)
 	if err != nil {
-		log.Fatalf("Error requesting currency API: %v\n", err)
+		log.Printf("Error requesting currency API: %v\n", err)
 		return 0, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("Error reading response body: %v\n", err)
+		log.Printf("Error reading response body: %v\n", err)
 		return 0, err
 	}
 
 	var curBeaconResp getRatesResp
 	if err := json.Unmarshal(body, &curBeaconResp); err != nil {
-		log.Fatalf("Error unmarshaling response: %v\n", err)
+		log.Printf("Error unmarshaling response: %v\n", err)
 		return 0, err
 	}
 	rate := curBeaconResp.Rates[cur]
 	if rate == 0 {
 		err = errors.New("quotation rate mustn't be zero")
-		log.Fatalf("%v\n", err)
+		log.Println(err)
 		return 0, err
 	}
 	return rate, nil

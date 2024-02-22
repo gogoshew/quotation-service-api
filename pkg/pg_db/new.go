@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	rateBufferTable = "rate_buffer"
-	latestTable     = "latest"
+	rateBufferTable = "buffer_rates"
+	latestTable     = "latest_rates"
 	baseCurrency    = "USD"
 	eur             = "EUR"
 	mxn             = "MXN"
@@ -24,13 +24,13 @@ type DatabasePg struct {
 func NewDatabasePg(dsn string) (*DatabasePg, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Failed to connect to Postgres: %v", err)
+		log.Printf("Failed to connect to Postgres: %v", err)
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&RateBuffer{}, &LatestRate{})
+	err = db.AutoMigrate(&BufferRate{}, &LatestRate{})
 	if err != nil {
-		log.Fatalf("Failed to migrate: %v", err)
+		log.Printf("Failed to migrate: %v", err)
 		return nil, err
 	}
 
@@ -39,10 +39,30 @@ func NewDatabasePg(dsn string) (*DatabasePg, error) {
 		{Currency: mxn, Base: baseCurrency},
 		{Currency: gel, Base: baseCurrency},
 	}
-	db.Create(&latestRates)
-	if db.Error != nil {
-		log.Fatalf("Error creating currencies for latest table: %v\n", err)
-		return nil, err
+
+	var count int64
+	db.Model(&LatestRate{}).Count(&count)
+	if count == 0 {
+		db.Create(&latestRates)
+		if db.Error != nil {
+			log.Printf("Error creating currencies for latest table: %v\n", err)
+			return nil, err
+		}
+	}
+
+	bufferRates := []BufferRate{
+		{Currency: eur, Base: baseCurrency},
+		{Currency: mxn, Base: baseCurrency},
+		{Currency: gel, Base: baseCurrency},
+	}
+	var c int64
+	db.Model(&BufferRate{}).Count(&c)
+	if c == 0 {
+		db.Create(&bufferRates)
+		if db.Error != nil {
+			log.Printf("Error creating rows for buffer rates table: %v\n", err)
+			return nil, err
+		}
 	}
 
 	return &DatabasePg{
@@ -51,37 +71,36 @@ func NewDatabasePg(dsn string) (*DatabasePg, error) {
 	}, nil
 }
 
-func (d *DatabasePg) CreateRowBuffer(rateBuffer *RateBuffer) error {
-	res := d.db.Table(rateBufferTable).Create(rateBuffer)
-	if err := res.Error; err != nil {
-		log.Fatalf("Error inserting row into %s table", rateBufferTable)
+func (d *DatabasePg) UpdateBuffer(cur string, rateBuffer BufferRate) error {
+	if err := d.db.Model(&BufferRate{}).Where("currency = ?", cur).Updates(rateBuffer).Error; err != nil {
+		log.Printf("Error updating %s row in buffer_rates table: %v\n", cur, err)
 		return err
 	}
 	return nil
 }
 
-func (d *DatabasePg) GetRowByCurBuffer(currency string) (RateBuffer, error) {
-	var row RateBuffer
+func (d *DatabasePg) GetRowByCurBuffer(currency string) (BufferRate, error) {
+	var row BufferRate
 
 	if err := d.db.Table(rateBufferTable).Where("currency = ?", currency).Find(&row).Error; err != nil {
-		return RateBuffer{}, err
+		return BufferRate{}, err
 	}
 	return row, nil
 }
 
-func (d *DatabasePg) GetRowByIDBuffer(updateID string) (RateBuffer, error) {
-	var row RateBuffer
+func (d *DatabasePg) GetRowByIDBuffer(updateID string) (BufferRate, error) {
+	var row BufferRate
 
-	if err := d.db.Table(rateBufferTable).Where("update_id = ?", updateID).Find(&row).Error; err != nil {
-		return RateBuffer{}, err
+	if err := d.db.Table(rateBufferTable).Where("update_id = ?", updateID).Where("update_flag = ?", true).Find(&row).Error; err != nil {
+		return BufferRate{}, err
 	}
 	return row, nil
 }
 
-func (d *DatabasePg) GetRowsForUpdate() ([]RateBuffer, error) {
-	var rows []RateBuffer
+func (d *DatabasePg) GetRowsForUpdate() ([]BufferRate, error) {
+	var rows []BufferRate
 	if err := d.db.Table(rateBufferTable).Where("update_flag = ?", true).Find(&rows).Error; err != nil {
-		log.Fatalf("Error getting rows for update from %s table", rateBufferTable)
+		log.Printf("Error getting rows for update from %s table", rateBufferTable)
 		return nil, err
 	}
 
@@ -90,11 +109,11 @@ func (d *DatabasePg) GetRowsForUpdate() ([]RateBuffer, error) {
 
 func (d *DatabasePg) UpdateLatest(currency string, val float64) error {
 	if err := d.db.Model(&LatestRate{}).Where("currency = ?", currency).Update("value", val).Error; err != nil {
-		log.Fatalf("Error updating latest table: %v\n", err)
+		log.Printf("Error updating latest table: %v\n", err)
 		return err
 	}
-	if err := d.db.Model(&RateBuffer{}).Where("currency = ?", currency).Update("update_flag", false).Error; err != nil {
-		log.Fatalf("Error scaling to false update_flag in rate_buffer table: %v\n", err)
+	if err := d.db.Model(&BufferRate{}).Where("currency = ?", currency).Update("update_flag", false).Error; err != nil {
+		log.Printf("Error scaling to false update_flag in rate_buffer table: %v\n", err)
 		return err
 	}
 	return nil

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	dsn = "user=user password=password dbname=quotation_db host=localhost port=5432 sslmode=disable"
+	dsn = "user=user password=password dbname=quotation_db host=localhost port=5433 sslmode=disable"
 )
 
 func main() {
@@ -23,13 +23,19 @@ func main() {
 	router := mux.NewRouter()
 
 	db, dbErr := pg_db.NewDatabasePg(dsn)
-	panicIfErr(dbErr)
+	if dbErr != nil {
+		panic(dbErr)
+	}
+	//panicIfErr(dbErr)
 
 	ts := repo_cron.NewTaskScheduler()
 	ts.Start()
 	newTask := repo_cron.NewTask(db)
 	cronErr := ts.AddTask("@every 30s", newTask.Run)
-	panicIfErr(cronErr)
+	if dbErr != nil {
+		panic(cronErr)
+	}
+	//panicIfErr(cronErr)
 
 	srv := internal.NewServer(appContext, router, db, ts)
 
@@ -39,7 +45,7 @@ func main() {
 	go func() {
 		log.Println("Starting server on :8080")
 		if err := srv.ListenAndServe(); err != nil {
-			log.Fatalf("Listen and Serve failed: %v", err)
+			log.Printf("Listen and Serve failed: %v", err)
 		}
 	}()
 
