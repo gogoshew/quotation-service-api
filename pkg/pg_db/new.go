@@ -9,6 +9,7 @@ import (
 
 const (
 	rateBufferTable = "rate_buffer"
+	latestTable     = "latest"
 	baseCurrency    = "USD"
 	eur             = "EUR"
 	mxn             = "MXN"
@@ -67,7 +68,7 @@ func (d *DatabasePg) CreateRowBuffer(rateBuffer *RateBuffer) error {
 	return nil
 }
 
-func (d *DatabasePg) GetRowByCurrency(currency string) (RateBuffer, error) {
+func (d *DatabasePg) GetRowByCurBuffer(currency string) (RateBuffer, error) {
 	var row RateBuffer
 
 	if err := d.db.Table(rateBufferTable).Where("currency = ?", currency).Find(&row).Error; err != nil {
@@ -76,7 +77,7 @@ func (d *DatabasePg) GetRowByCurrency(currency string) (RateBuffer, error) {
 	return row, nil
 }
 
-func (d *DatabasePg) GetRowByUpdateID(updateID string) (RateBuffer, error) {
+func (d *DatabasePg) GetRowByIDBuffer(updateID string) (RateBuffer, error) {
 	var row RateBuffer
 
 	if err := d.db.Table(rateBufferTable).Where("update_id = ?", updateID).Find(&row).Error; err != nil {
@@ -105,4 +106,13 @@ func (d *DatabasePg) UpdateLatest(currency string, val float64) error {
 		return err
 	}
 	return nil
+}
+
+func (d *DatabasePg) GetLatest(currency string) (LatestRate, error) {
+	var row LatestRate
+
+	if err := d.db.Table(latestTable).Where("currency = ?", currency).Find(&row).Error; err != nil {
+		return LatestRate{}, err
+	}
+	return row, nil
 }

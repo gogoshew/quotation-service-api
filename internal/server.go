@@ -40,8 +40,8 @@ func NewServer(ctx context.Context, router *mux.Router, db *pg_db.DatabasePg, ts
 	}
 
 	router.HandleFunc("/quotation/update", s.updateQuotation).Methods("POST")
-	router.HandleFunc("/quotation/{id}", s.getQuotationByID).Methods("GET")
-	router.HandleFunc("/quotation/{currency}", s.getQuotationValue).Methods("GET")
+	router.HandleFunc("/quotation/id", s.getQuotationByID).Methods("GET")
+	router.HandleFunc("/quotation/latest", s.getLatest).Methods("GET")
 
 	return
 }
@@ -57,7 +57,7 @@ type updateReq struct {
 }
 
 type updateResp struct {
-	UpdateID uuid.UUID `json:"updateID"`
+	UpdateID string `json:"updateID"`
 }
 
 func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
@@ -65,19 +65,23 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	var reqBody updateReq
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		log.Fatalf("Error decoding request body: %v\n", err)
+		log.Printf("Error decoding request body: %v\n", err)
+		return
 	}
 
 	rateValue, err := s.getRate(reqBody.Currency)
 	if err != nil {
-		log.Fatalf("Error getting rate from currency API: %v\n", err)
+		log.Printf("Error getting rate from currency API: %v\n", err)
+		return
 	}
 
-	row, err := s.db.GetRowByCurrency(reqBody.Currency)
+	row, err := s.db.GetRowByCurBuffer(reqBody.Currency)
 	if err != nil {
-		log.Fatalf("Error getting row from rate buffer table: %v\n", err)
+		log.Printf("Error getting row from rate buffer table: %v\n", err)
+		return
 	}
 	updateID = row.UpdateID
+	const base = "USD"
 
 	if row.UpdateFlag == false {
 		updateID = uuid.New().String()
@@ -85,52 +89,100 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 			UpdateID:   updateID,
 			Currency:   reqBody.Currency,
 			Value:      rateValue,
-			Base:       "USD",
+			Base:       base,
 			UpdateFlag: true,
 		}
 
 		if err := s.db.CreateRowBuffer(rateInfo); err != nil {
-			log.Fatalf("Error inserting row rate buffer table: %v\n", err)
+			log.Printf("Error inserting row rate buffer table: %v\n", err)
+			return
 		}
 	}
 
-	// Возвращаю ID обновления в респонсе
+	resp := updateResp{
+		UpdateID: updateID,
+	}
+	res, err := json.Marshal(resp)
+	if err != nil {
+		log.Println("Error marshalling response")
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(updateID))
+	w.Write(res)
 }
 
 type QuotationByIDReq struct {
-	UpdateID string
+	UpdateID string `json:"updateID"`
 }
 
 type QuotationByIDResp struct {
-	Value    float64
-	UpdateAt time.Time
+	Value    float64   `json:"value"`
+	UpdateAt time.Time `json:"updateAt"`
 }
 
 func (s *Server) getQuotationByID(w http.ResponseWriter, r *http.Request) {
 	var req QuotationByIDReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Fatalf("Error decoding request body: %v\n", err)
+		log.Printf("Error decoding request body: %v\n", err)
 	}
 
-	//var row pg_db.RateBuffer
-	row, err := s.db.GetRowByUpdateID(req.UpdateID)
+	row, err := s.db.GetRowByIDBuffer(req.UpdateID)
 	if err != nil {
-		log.Fatalf("Error getting quotation by ID: %v\n", err)
+		log.Printf("Error getting quotation by ID: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	var resp QuotationByIDResp
+	resp := QuotationByIDResp{
+		Value:    row.Value,
+		UpdateAt: row.UpdateAt,
+	}
+
+	res, err := json.Marshal(resp)
+	if err != nil {
+		log.Println("Error marshalling response")
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(updateID))
+	w.Write(res)
 }
 
-func (s *Server) getQuotationValue(w http.ResponseWriter, r *http.Request) {
+type LatestReq struct {
+	Currency string `json:"currency"`
+}
 
+type LatestResp struct {
+	Value    float64   `json:"value"`
+	UpdateAt time.Time `json:"updateAt"`
+}
+
+func (s *Server) getLatest(w http.ResponseWriter, r *http.Request) {
+	var req LatestReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request body: %v\n", err)
+	}
+	row, err := s.db.GetLatest(req.Currency)
+	if err != nil {
+		log.Printf("Error getting quotation by ID: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	resp := LatestResp{
+		Value:    row.Value,
+		UpdateAt: row.UpdateAt,
+	}
+
+	res, err := json.Marshal(resp)
+	if err != nil {
+		log.Println("Error marshalling response")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(res)
 }
 
 func (s *Server) getRate(cur string) (float64, error) {
@@ -168,13 +220,3 @@ func (s *Server) getRate(cur string) (float64, error) {
 	}
 	return rate, nil
 }
-
-//func ValidateCurrencies() {
-//	rates := map[string]bool{
-//		"USD": true,
-//		"EUR": true,
-//		"MXN": true,
-//		"GEL": true,
-//		"RUB": true,
-//	}
-//}
