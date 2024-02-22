@@ -17,18 +17,11 @@ const (
 )
 
 type DatabasePg struct {
-	dsn        string
-	currencies map[string]bool
-	db         *gorm.DB
+	dsn string
+	db  *gorm.DB
 }
 
 func NewDatabasePg(dsn string) (*DatabasePg, error) {
-	c := map[string]bool{
-		"EUR": false,
-		"MXN": false,
-		"GEL": false,
-	}
-
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to Postgres: %v", err)
@@ -53,9 +46,8 @@ func NewDatabasePg(dsn string) (*DatabasePg, error) {
 	}
 
 	return &DatabasePg{
-		dsn:        dsn,
-		currencies: c,
-		db:         db,
+		dsn: dsn,
+		db:  db,
 	}, nil
 }
 

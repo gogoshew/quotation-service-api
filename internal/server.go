@@ -17,6 +17,13 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const (
+	eur  = "EUR"
+	mxn  = "MXN"
+	gel  = "GEL"
+	base = "USD"
+)
+
 type Server struct {
 	ctx    context.Context
 	router *mux.Router
@@ -61,11 +68,15 @@ type updateResp struct {
 }
 
 func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
-	var updateID string
-
 	var reqBody updateReq
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		log.Printf("Error decoding request body: %v\n", err)
+		return
+	}
+
+	if !ValidateCurrency(reqBody.Currency) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("No such currency"))
 		return
 	}
 
@@ -80,8 +91,7 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error getting row from rate buffer table: %v\n", err)
 		return
 	}
-	updateID = row.UpdateID
-	const base = "USD"
+	updateID := row.UpdateID
 
 	if row.UpdateFlag == false {
 		updateID = uuid.New().String()
@@ -112,9 +122,9 @@ func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 	w.Write(res)
 }
 
-type QuotationByIDReq struct {
-	UpdateID string `json:"updateID"`
-}
+//type QuotationByIDReq struct {
+//	UpdateID string `json:"updateID"`
+//}
 
 type QuotationByIDResp struct {
 	Value    float64   `json:"value"`
@@ -122,12 +132,14 @@ type QuotationByIDResp struct {
 }
 
 func (s *Server) getQuotationByID(w http.ResponseWriter, r *http.Request) {
-	var req QuotationByIDReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error decoding request body: %v\n", err)
-	}
+	//var req QuotationByIDReq
+	//if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	//	log.Printf("Error decoding request body: %v\n", err)
+	//}
 
-	row, err := s.db.GetRowByIDBuffer(req.UpdateID)
+	updateID := r.URL.Query().Get("id")
+
+	row, err := s.db.GetRowByIDBuffer(updateID)
 	if err != nil {
 		log.Printf("Error getting quotation by ID: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -149,9 +161,9 @@ func (s *Server) getQuotationByID(w http.ResponseWriter, r *http.Request) {
 	w.Write(res)
 }
 
-type LatestReq struct {
-	Currency string `json:"currency"`
-}
+//type LatestReq struct {
+//	Currency string `json:"currency"`
+//}
 
 type LatestResp struct {
 	Value    float64   `json:"value"`
@@ -159,11 +171,13 @@ type LatestResp struct {
 }
 
 func (s *Server) getLatest(w http.ResponseWriter, r *http.Request) {
-	var req LatestReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error decoding request body: %v\n", err)
-	}
-	row, err := s.db.GetLatest(req.Currency)
+	//var req LatestReq
+	//if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	//	log.Printf("Error decoding request body: %v\n", err)
+	//}
+	cur := r.URL.Query().Get("currency")
+
+	row, err := s.db.GetLatest(cur)
 	if err != nil {
 		log.Printf("Error getting quotation by ID: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -219,4 +233,14 @@ func (s *Server) getRate(cur string) (float64, error) {
 		return 0, err
 	}
 	return rate, nil
+}
+
+func ValidateCurrency(currency string) bool {
+	c := map[string]struct{}{
+		eur: {},
+		mxn: {},
+		gel: {},
+	}
+	_, ok := c[currency]
+	return ok
 }
