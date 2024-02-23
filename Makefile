@@ -5,7 +5,7 @@ postgres-up:
 
 .PHONY: compose-up
 compose-up:
-	docker-compose -p app up --remove-orphans --abort-on-container-exit --exit-code-from=quotation-service
+	docker-compose -p app -f docker-compose.yaml up --remove-orphans --abort-on-container-exit --exit-code-from=quotation-service
 
 .PHONY: compose-down
 compose-down:
