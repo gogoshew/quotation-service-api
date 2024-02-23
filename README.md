@@ -37,5 +37,6 @@ Also, you could use prepared requests in `http` folder
 ## How to run app
 
 There is `Makefile` in current project:
+- pull app images `make build-app`
 - run app  `make compose-up` from project root directory
 - stop app `make compose-down` from project root directory
