@@ -40,7 +40,7 @@ func NewServer(ctx context.Context, router *mux.Router, db *pg_db.DatabasePg, ts
 		db:     db,
 		ts:     ts,
 		Server: http.Server{
-			Addr:         ":8080",
+			Addr:         os.Getenv("SERVER_BIND"),
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: 10 * time.Second,
 			Handler:      router,

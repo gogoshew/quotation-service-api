@@ -5,4 +5,4 @@ postgres-up:
 
 .PHONY: compose-up
 compose-up:
-	docker-compose -p quotation-service up --remove-orphans --abort-on-container-exit --exit-code-from=quotation-service
+	docker-compose -p app up --remove-orphans --abort-on-container-exit --exit-code-from=quotation-service

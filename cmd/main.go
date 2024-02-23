@@ -26,7 +26,7 @@ func main() {
 	ts := repo_cron.NewTaskScheduler()
 	ts.Start()
 	newTask := repo_cron.NewTask(db)
-	cronErr := ts.AddTask("@every 30s", newTask.Run)
+	cronErr := ts.AddTask(os.Getenv("CRON_INTERVAL"), newTask.Run)
 	if dbErr != nil {
 		panic(cronErr)
 	}
@@ -37,7 +37,7 @@ func main() {
 	signal.Notify(stop, os.Interrupt)
 
 	go func() {
-		log.Println("Starting server on :8080")
+		log.Printf("Starting server on %s\n", os.Getenv("SERVER_BIND"))
 		if err := srv.ListenAndServe(); err != nil {
 			log.Printf("Listen and Serve failed: %v", err)
 		}
