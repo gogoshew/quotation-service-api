@@ -1,0 +1,9 @@
+
+### UpdateQuotation
+POST localhost:8080/quotation/update?currency=eur HTTP/1.1
+
+### GetQuotationValueByID
+GET localhost:8080/quotation/id?id=37faceab-d784-4256-8d43-444f59b0544d HTTP/1.1
+
+### GetLatestQuotationByCurrency
+GET localhost:8080/quotation/latest?currency=eur HTTP/1.1

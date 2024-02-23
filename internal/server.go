@@ -77,6 +77,8 @@ type updateResp struct {
 	UpdateID string `json:"updateID"`
 }
 
+// @Summary Обновление котировки
+// @Description Обновить котировку. Сервис присваивает запросу обновления идентификатор. В ответе сервис отдает идентификатор обновления. Сервис выполняет обновление котировки в фоновом режиме
 func (s *Server) updateQuotation(w http.ResponseWriter, r *http.Request) {
 	cur := strings.ToTitle(r.URL.Query().Get("currency"))
 
@@ -148,6 +150,7 @@ func (s *Server) getQuotationByID(w http.ResponseWriter, r *http.Request) {
 	if row.Value == 0 && row.UpdatedAt.IsZero() {
 		log.Printf("ID %v doesn't exist", updateID)
 		w.Write([]byte(fmt.Sprintf("ID %v doesn't exist", updateID)))
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 

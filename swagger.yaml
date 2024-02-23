@@ -1,0 +1,112 @@
+openapi: 3.0.0
+info:
+  title: Quotation Service API
+  description: Service for check and update quotations
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+paths:
+
+  /quotation/update:
+    post:
+      summary: Update quotation
+      description: Create request for update quotation and return update ID
+      parameters:
+        - name: currency
+          in: query
+          description: Currency code (EUR, MXN, GEL)
+          required: true
+          schema:
+            type: string
+            example: EUR
+      responses:
+        '200':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+              examples:
+                success:
+                  summary: Successful response example
+                  value:
+                    updateID: 004afff4-1c60-426e-97a5-a436b52266a6
+        '400':
+          description: Bad request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: No such currency
+        '500':
+          description: Internal server error
+  /quotation/id:
+    get:
+      summary: Get info by update ID
+      description: Returns information about currency value and update time by update ID
+      parameters:
+        - name: id
+          in: query
+          description: Update ID
+          required: true
+          schema:
+            type: string
+            example: 004afff4-1c60-426e-97a5-a436b52266a6
+      responses:
+        '200':
+          description: Got info
+          content:
+            application/json:
+              schema:
+                type: object
+              examples:
+                success:
+                  summary: Successful response example
+                  value:
+                    value: 0.92387711
+                    updateID: 2024-02-23T11:08:10.354134Z
+        '400':
+          description: Bad request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ID 30180c02-4b38-4ccb-9e79-0262a869b19b doesn't exist
+        '500':
+          description: Internal server error
+
+  /quotation/latest:
+    get:
+      summary: Get latest
+      description: Returns latest info about currency quotation
+      parameters:
+        - name: id
+          in: query
+          description: Update ID
+          required: true
+          schema:
+            type: string
+            example: 004afff4-1c60-426e-97a5-a436b52266a6
+      responses:
+        '200':
+          description: Got latest info
+          content:
+            application/json:
+              schema:
+                type: object
+              examples:
+                success:
+                  summary: Successful response example
+                  value:
+                    value: 0.92387711
+                    updateID: 2024-02-23T11:08:40.01845Z
+        '400':
+          description: Bad request
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: No such currency
+        '500':
+          description: Internal server error
+

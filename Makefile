@@ -6,3 +6,7 @@ postgres-up:
 .PHONY: compose-up
 compose-up:
 	docker-compose -p app up --remove-orphans --abort-on-container-exit --exit-code-from=quotation-service
+
+.PHONY: compose-down
+compose-down:
+	docker-compose -p app down -v
