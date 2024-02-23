@@ -12,17 +12,13 @@ import (
 	"github.com/gorilla/mux"
 )
 
-const (
-	dsn = "user=user password=password dbname=quotation_db host=localhost port=5433 sslmode=disable"
-)
-
 func main() {
 	appContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	router := mux.NewRouter()
 
-	db, dbErr := pg_db.NewDatabasePg(dsn)
+	db, dbErr := pg_db.NewDatabasePg(os.Getenv("DB_CON_STR"))
 	if dbErr != nil {
 		panic(dbErr)
 	}

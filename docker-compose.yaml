@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:latest
+    ports:
+      - "127.0.0.1:5433:5432"
+#    logging:
+#      driver: "none"
+    environment:
+      POSTGRES_DB: "quotation_db"
+      POSTGRES_USER: "user"
+      POSTGRES_PASSWORD: "password"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U your_username" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  quotation-service:
+    build:
+      context: ../../..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      DB_CON_STR: "user=user password=password dbname=quotation_db host=localhost port=5433 sslmode=disable"
+      CURRENCY_BEACON_URL: "https://api.currencybeacon.com/v1/latest"
+      CURRENCY_BEACON_TOKEN: "y3wA4rW34r5oXGaX592nns8JgouvA6Wm"
+    depends_on:
+      postgres:
+        condition: service_healthy

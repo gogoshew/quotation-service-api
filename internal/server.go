@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"qsapi/pkg/pg_db"
 	"qsapi/pkg/repo_cron"
 	"strings"
@@ -19,11 +20,9 @@ import (
 )
 
 const (
-	eur    = "EUR"
-	mxn    = "MXN"
-	gel    = "GEL"
-	apiURI = "https://api.currencybeacon.com/v1/latest"
-	apiKey = "y3wA4rW34r5oXGaX592nns8JgouvA6Wm"
+	eur = "EUR"
+	mxn = "MXN"
+	gel = "GEL"
 )
 
 type Server struct {
@@ -212,10 +211,10 @@ func (s *Server) getLatest(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getRate(cur string) (float64, error) {
 	qp := url.Values{}
-	qp.Set("api_key", apiKey)
+	qp.Set("api_key", os.Getenv("CURRENCY_BEACON_TOKEN"))
 	qp.Set("symbols", cur)
 
-	reqURL := fmt.Sprintf("%s?%s", apiURI, qp.Encode())
+	reqURL := fmt.Sprintf("%s?%s", os.Getenv("CURRENCY_BEACON_URL"), qp.Encode())
 
 	resp, err := http.Get(reqURL)
 	if err != nil {
